@@ -3,6 +3,11 @@ from typing import BinaryIO
 from collections import defaultdict
 import regex as re
 
+class Token:
+    def __init__(self, symbols: tuple[bytes, ...], count: int):
+        self.symbols = symbols
+        self.count = count
+
 def find_chunk_boundaries(
     file: BinaryIO,
     desired_num_chunks: int,
@@ -107,37 +112,66 @@ def pre_tokenization(input_path: str | os.PathLike, special_tokens: list[str]) -
         return results
 
 
-def count_adjacent_pairs(pretoks: dict[tuple[bytes,...],int]) -> dict[tuple[bytes, bytes], int]:
+def count_adjacent_pairs(tokens: list[Token]) -> tuple[dict[tuple[bytes, bytes], int], dict[tuple[bytes, bytes], set[int]]]:
     """
-    count the adj pairs count
+    count the adj pairs count cache, and the locations of pair
     """
     counts = defaultdict(int)
-    for k,v in pretoks.items():
-        for byte1, byte2 in zip(k, k[1:]):
-            counts[(byte1, byte2)] += v
-    return counts
+    pair_locations = defaultdict(set[int])
+    for index, token in enumerate(tokens):
+        for byte1, byte2 in zip(token.symbols, token.symbols[1:]):
+            counts[(byte1, byte2)] += token.count
+            pair_locations[(byte1, byte2)].add(index) # ensuring each Token_{i} is different(the dict has ensured that)
+    return counts, pair_locations
 
-def do_merge(pretoks: dict[tuple[bytes,...],int], pair: tuple[bytes, bytes]) -> dict[tuple[bytes,...],int]:
+def do_merge(tokens: list[Token], pair: tuple[bytes, bytes], pair_locations: dict[tuple[bytes,bytes], set[int]], counts: dict[tuple[bytes, bytes], int]):
     """
-    merge pretoks by pair, and return merged dict
+        1. locate where pair exists in tokens by pair_locations
+        2. merge the pair in these tokens, update tokens token by token
+        3. update counts by the merge process, and update pair_locations by the merge process
     """
-    new_toks = {}
-    for key,value in pretoks.items():
-        if pair[0] not in key and pair[1] not in key:
-            new_toks[key] = value
-            continue
-        new_key = []
-
+    for idx in pair_locations[pair]:
+        token_count = tokens[idx].count
+        token_symbols = tokens[idx].symbols
+        new_symbols = []
         i = 0
-        while i < len(key):
-            if i + 1 < len(key) and key[i] == pair[0] and key[i+1] == pair[1]:
-                new_key.append(pair[0]+pair[1])
+        counts_changes = defaultdict(int)
+        while i < len(token_symbols):
+            if i + 1 < len(token_symbols) and token_symbols[i] == pair[0] and token_symbols[i+1] == pair[1]:
+                new_symbols.append(pair[0]+pair[1]) # pair[0] is key[i], pair[1] is key[i+1]
+
+                # count change is linear.
+                # decrease old adjacent neighburing counts.
+                counts_changes[pair] -= 1 * token_count
+                if i > 0:
+                    left_adj = (token_symbols[i-1], token_symbols[i])
+                    counts_changes[left_adj] -= 1 * token_count
+                if i + 2 < len(token_symbols):
+                    right_adj = (token_symbols[i+1], token_symbols[i+2])
+                    counts_changes[right_adj] -= 1 * token_count
+                
+                # increase new adjacent neighburing counts. notice that this is linear processing
+                # so using new-old bounding, keeps the invariant of loop
+                if len(new_symbols) > 1:
+                    # the invariant is that, tail is the just merged pair
+                    left_adj = (new_symbols[-2], new_symbols[-1])
+                    counts_changes[left_adj] += 1 * token_count
+                if i + 2 < len(token_symbols):
+                    # the invariant is that, i + 2 is the linear process's right neighbor
+                    right_adj = (new_symbols[-1], token_symbols[i+2])
+                    counts_changes[right_adj] += 1 * token_count
                 i += 2
             else:
-                new_key.append(key[i])
+                new_symbols.append(token_symbols[i])
                 i += 1
-        new_toks[tuple(new_key)] = value
-    return new_toks
+        tokens[idx].symbols = new_symbols
+        # the new adjacent counts, finally added to locations.
+        # and update variation to counts
+        for k, v in counts_changes.items():
+            counts[k] += v
+            if v > 0:
+                pair_locations[k].add(idx)
+
 
 def train_bpe(
     input_path: str | os.PathLike,
@@ -156,15 +190,18 @@ def train_bpe(
     
     # 2. run pretokenization
     pretoks: dict[tuple[bytes,...], int] = pre_tokenization(input_path, special_tokens)
-    
+    # add: dict->list
+    tokens : list[Token] = []
+    for symbols, count in pretoks.items():
+        tokens.append(Token(symbols, count))
+
     # 3. run BPE merge
-    
     num_merges = vocab_size - 256 - len(special_tokens)
 
-    for i in range(num_merges):
-        # 1. count
-        counts = count_adjacent_pairs(pretoks)
+    # 1. count once, and see index and cache.
+    counts, pair_locations = count_adjacent_pairs(tokens)
 
+    for i in range(num_merges):
         # 2. Find the most common pair
         pair = max(counts, key=lambda k: (counts[k], k))
         # 3. add new vocab
@@ -173,6 +210,6 @@ def train_bpe(
 
         # 4. do merge
         merge.append(pair)
-        pretoks = do_merge(pretoks, pair)
+        do_merge(tokens, pair, pair_locations, counts)
     
     return vocab, merge
