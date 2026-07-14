@@ -72,7 +72,7 @@ def pre_tok(start: int, end: int, input_path: str, special_tokens: list[str]) ->
         parts = re.split("|".join(map(re.escape, special_tokens)), chunk)
 
         # pretokenizes each part and count occurrences.
-        PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+'"""
+        PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
         for part in parts:
             for pretok in re.finditer(PAT, part):
                 pretok = pretok.group()
