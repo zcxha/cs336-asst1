@@ -138,18 +138,19 @@ def do_merge(tokens: list[Token], pair: tuple[bytes, bytes], pair_locations: dic
         counts_changes = defaultdict(int)
         while i < len(token_symbols):
             if i + 1 < len(token_symbols) and token_symbols[i] == pair[0] and token_symbols[i+1] == pair[1]:
-                new_symbols.append(pair[0]+pair[1]) # pair[0] is key[i], pair[1] is key[i+1]
 
                 # count change is linear.
                 # decrease old adjacent neighburing counts.
                 counts_changes[pair] -= 1 * token_count
                 if i > 0:
-                    left_adj = (token_symbols[i-1], token_symbols[i])
+                    left_adj = (new_symbols[-1], token_symbols[i])
                     counts_changes[left_adj] -= 1 * token_count
                 if i + 2 < len(token_symbols):
                     right_adj = (token_symbols[i+1], token_symbols[i+2])
                     counts_changes[right_adj] -= 1 * token_count
                 
+                new_symbols.append(pair[0]+pair[1]) # pair[0] is key[i], pair[1] is key[i+1]
+
                 # increase new adjacent neighburing counts. notice that this is linear processing
                 # so using new-old bounding, keeps the invariant of loop
                 if len(new_symbols) > 1:
