@@ -8,7 +8,7 @@ import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
-from cs336_basics import bpe_train, bpe_tokenizer
+from cs336_basics import basic_blocks, bpe_train, bpe_tokenizer, prenorm_transformer_block
 
 def run_linear(
     d_in: int,
@@ -28,8 +28,11 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
+    L = basic_blocks.Linear(d_in, d_out)
+    with torch.no_grad():
+        L.W.copy_(weights)
+    return L.forward(in_features)
 
-    raise NotImplementedError
 
 
 def run_embedding(
@@ -51,7 +54,10 @@ def run_embedding(
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
 
-    raise NotImplementedError
+    E = basic_blocks.Embedding(vocab_size, d_model)
+    with torch.no_grad():
+        E.embeds.copy_(weights)
+    return E.forward(token_ids)
 
 
 def run_swiglu(
@@ -83,7 +89,9 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    raise NotImplementedError
+    swiglu = prenorm_transformer_block.SwiGLU(d_model, d_ff)
+    swiglu.load_state_dict({"w1_weight": w1_weight, "w2_weight": w2_weight, "w3_weight": w3_weight})
+    return swiglu.forward(in_features)
 
 
 def run_scaled_dot_product_attention(
@@ -200,7 +208,8 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+    rope = prenorm_transformer_block.RotaryPositionalEmbedding(theta, d_k, max_seq_len)
+    return rope.forward(in_query_or_key, token_positions)
 
 
 def run_transformer_block(
@@ -378,7 +387,12 @@ def run_rmsnorm(
         Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    raise NotImplementedError
+    R = prenorm_transformer_block.RMSNorm(d_model, eps)
+    with torch.no_grad():
+        R.gain.copy_(weights)
+    return R.forward(in_features)
+
+    
 
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
