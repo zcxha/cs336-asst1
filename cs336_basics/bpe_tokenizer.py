@@ -25,6 +25,8 @@ class Tokenizer:
         self.vocab = vocab
         self.merges = merges
         self.vocab_rev = {v: k for k,v in vocab.items()}
+        self.merge_sets = set(self.merges)
+        self.merge_dict = {k:v for v,k in enumerate(self.merges)}
         
 
     @classmethod
@@ -40,25 +42,6 @@ class Tokenizer:
         with open(merges_filepath, 'rb') as f:
             merges = pickle.load(f)
         return cls(vocab, merges, special_tokens = special_tokens)
-        
-    @staticmethod
-    def _merge(pretokens: list[tuple[bytes,...]], pair: tuple[bytes, bytes]) -> list[tuple[bytes,...]]:
-        """
-        input pretoken list, merge every pretoken by pair.
-        """
-        res = []
-        for token in pretokens:
-            new_token = []
-            i = 0
-            while i < len(token):
-                if i + 1 < len(token) and token[i] == pair[0] and token[i+1] == pair[1]:
-                    new_token.append(pair[0]+pair[1])
-                    i += 2
-                else:
-                    new_token.append(token[i])
-                    i += 1
-            res.append(tuple(new_token))
-        return res
 
     @staticmethod
     def _split(text: str, special_tokens_list: list[str]) -> list[str]:
@@ -77,6 +60,7 @@ class Tokenizer:
         Encode an input text into a sequence of token IDs.
         """
         res = []
+        
         # pretokenize by splitted parts and merge dynamicly, then append to result
 
         # split by special tokens
@@ -88,14 +72,27 @@ class Tokenizer:
             if part in self.special_tokens:
                 res.append(self.vocab_rev[part.encode('utf-8')])
             else:
-                pretokens = re.findall(PAT, part)
-                pretokens = [tuple(bytes([b]) for b in s.encode('utf-8')) for s in pretokens]
-
-                for pair in self.merges:
-                    pretokens = Tokenizer._merge(pretokens, pair)
-            
-                for token in pretokens:
-                    for vocab in token:
+                for pretoken in re.finditer(PAT, part):
+                    pretoken = tuple(bytes([b]) for b in pretoken.group().encode('utf-8'))
+                    while True:
+                        cur_merge_idx = defaultdict(list[int])
+                        for (idx, a),b in zip(enumerate(pretoken), pretoken[1:]):
+                            cur_merge_idx[(a,b)].append(idx)
+                        if not any(x in self.merge_sets for x in cur_merge_idx.keys()):
+                            break
+                        cur_merge_pair = min(cur_merge_idx.keys(), key = lambda x : self.merge_dict[x] if x in self.merge_sets else 1e42)
+                        cur_merge_indices = cur_merge_idx[cur_merge_pair]
+                        new_pretoken = []
+                        i = 0
+                        while i < len(pretoken):
+                            if i in cur_merge_indices:
+                                new_pretoken.append(cur_merge_pair[0]+cur_merge_pair[1])
+                                i += 2
+                            else:
+                                new_pretoken.append(pretoken[i])
+                                i += 1
+                        pretoken = tuple(new_pretoken)
+                    for vocab in pretoken:
                         res.append(self.vocab_rev[vocab])
         return res
     
@@ -115,17 +112,24 @@ class Tokenizer:
                 else:
                     for pretoken in re.finditer(PAT, part):
                         pretoken = tuple(bytes([b]) for b in pretoken.group().encode('utf-8'))
-                        for pair in self.merges:
-                            new_token = []
+                        while True:
+                            cur_merge_idx = defaultdict(list[int])
+                            for (idx, a),b in zip(enumerate(pretoken), pretoken[1:]):
+                                cur_merge_idx[(a,b)].append(idx)
+                            if not any(x in self.merge_sets for x in cur_merge_idx.keys()):
+                                break
+                            cur_merge_pair = min(cur_merge_idx.keys(), key = lambda x : self.merge_dict[x] if x in self.merge_sets else 1e42)
+                            cur_merge_indices = cur_merge_idx[cur_merge_pair]
+                            new_pretoken = []
                             i = 0
                             while i < len(pretoken):
-                                if i + 1 < len(pretoken) and pretoken[i] == pair[0] and pretoken[i+1] == pair[1]:
-                                    new_token.append(pair[0]+pair[1])
+                                if i in cur_merge_indices:
+                                    new_pretoken.append(cur_merge_pair[0]+cur_merge_pair[1])
                                     i += 2
                                 else:
-                                    new_token.append(pretoken[i])
+                                    new_pretoken.append(pretoken[i])
                                     i += 1
-                            pretoken = new_token
+                            pretoken = tuple(new_pretoken)
                         for vocab in pretoken:
                             yield self.vocab_rev[vocab]
 
