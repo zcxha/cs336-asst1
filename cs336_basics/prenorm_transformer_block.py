@@ -129,7 +129,7 @@ class CausalMultiHeadSelfAttention(torch.nn.Module):
     q_proj: Linear
     k_proj: Linear
     v_proj: Linear
-    o_proj: Linear
+    output_proj: Linear
     def __init__(self, d_model: int, num_heads: int, 
                  rope: Bool = False,
                  theta: float | None = None, 
@@ -139,7 +139,7 @@ class CausalMultiHeadSelfAttention(torch.nn.Module):
         self.q_proj = Linear(d_model, d_model)
         self.k_proj = Linear(d_model, d_model)
         self.v_proj = Linear(d_model, d_model)
-        self.o_proj = Linear(d_model, d_model)
+        self.output_proj = Linear(d_model, d_model)
         self.d_model = d_model
         self.num_heads = num_heads
         self.rope = rope
@@ -180,7 +180,7 @@ class CausalMultiHeadSelfAttention(torch.nn.Module):
 
         O = einx.dot(
             "d_model (num_heads d_v), ... num_heads sequence_length d_v -> ... sequence_length d_model",
-            self.o_proj.weight,
+            self.output_proj.weight,
             mha,
             num_heads = self.num_heads
         )
@@ -209,4 +209,27 @@ class TransformerBlock(torch.nn.Module):
         self.ffn = SwiGLU(d_model, d_ff)
     
     def forward(self, x: Float[Tensor, "batch sequence_length d_model"]):
+        seq_len = x.shape[1]
+        batch_size = x.shape[0]
+        token_positions = torch.arange(0, seq_len).unsqueeze(0).unsqueeze(0).expand([batch_size, 1, seq_len])
+        
+        attention_with_rope = self.attn(self.ln1(x), token_positions) + x
+
+        ffn_result = self.ffn(self.ln2(attention_with_rope)) + attention_with_rope
+
+        return ffn_result
+
+class TransformerLM(torch.nn.Module):
+    r"""
+        LM
+        Args:
+            vocab_size(int): The size of the vocabulary, necessary for determining the dimensionality of the token embedding matrix.
+            context_length(int): The maximum context length, necessary for determining the dimensionality of the RoPE sin and cos buffer.
+            num_layers(int): The number of Transformer blocks to use.
+    """
+    def __init__(self, vocab_size: int, context_length: int, num_layers: int):
+        
+        super().__init__()
+    
+    def forward():
         pass
