@@ -1,10 +1,12 @@
 import torch
 import math
-from jaxtyping import Float, Int
+import einx
+from jaxtyping import Float, Int, Bool
+from torch import Tensor
 from einops import einsum
-
+from cs336_basics.basic_blocks import Linear
 class RMSNorm(torch.nn.Module):
-    gain: Float[torch.Tensor, "d_model"]
+    weight: Float[torch.Tensor, "d_model"]
 
     def __init__(self, d_model: int, eps: float=1e-5, device: torch.device | None=None, dtype: torch.dtype | None=None):
         r"""
@@ -16,7 +18,7 @@ class RMSNorm(torch.nn.Module):
             dtype: torch.dtype | None = None Data type of the parameters
         """
         super().__init__()
-        self.gain = torch.nn.Parameter(torch.ones(d_model))
+        self.weight = torch.nn.Parameter(torch.ones(d_model))
         self.eps = eps
         self.d_model = d_model
 
@@ -32,28 +34,28 @@ class RMSNorm(torch.nn.Module):
 
         x = x / rms_x[:, :, None]
 
-        result = einsum(x, self.gain, "... d_model, d_model -> ... d_model")
+        result = einsum(x, self.weight, "... d_model, d_model -> ... d_model")
 
         return result.to(in_dtype)
     
 class SwiGLU(torch.nn.Module):
-    w1_weight: Float[torch.Tensor, "d_ff d_model"]
-    w2_weight: Float[torch.Tensor, "d_model d_ff"]
-    w3_weight: Float[torch.Tensor, "d_ff d_model"]
+    w1: Linear # Float[torch.Tensor, "d_ff d_model"]
+    w2: Linear # Float[torch.Tensor, "d_model d_ff"]
+    w3: Linear # Float[torch.Tensor, "d_ff d_model"]
     def __init__(self, d_model: int, d_ff: int, device: torch.device | None=None, dtype: torch.dtype | None=None):
         super().__init__()
-        self.w1_weight = torch.nn.Parameter(torch.empty(d_ff, d_model))
-        self.w2_weight = torch.nn.Parameter(torch.empty(d_model, d_ff))
-        self.w3_weight = torch.nn.Parameter(torch.empty(d_ff, d_model))
+        self.w1 = Linear(d_model, d_ff, device=device, dtype=dtype)
+        self.w2 = Linear(d_ff, d_model, device=device, dtype=dtype)
+        self.w3 = Linear(d_model, d_ff, device=device, dtype=dtype)
         self.d_model = d_model
         self.d_ff = d_ff
 
     def forward(self, x: Float[torch.Tensor, "... d_model"]) -> Float[torch.Tensor, "... d_model"]:
-        W1_x = einsum(self.w1_weight, x, "d_ff d_model, ... d_model -> ... d_ff")
-        W3_x = einsum(self.w3_weight, x, "d_ff d_model, ... d_model -> ... d_ff")
+        W1_x = self.w1(x)
+        W3_x = self.w3(x)
         silu_part = W1_x * torch.sigmoid(W1_x)
         dot_prod = silu_part * W3_x
-        result = einsum(self.w2_weight, dot_prod, "d_model d_ff, ... d_ff -> ... d_model")
+        result = self.w2(dot_prod)
         return result
         
 class RotaryPositionalEmbedding(torch.nn.Module):
@@ -87,3 +89,124 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         interleave_xy = torch.stack([rot_x, rot_y], dim=-1)
         result = interleave_xy.flatten(-2)
         return result
+
+def softmax(x: Float[Tensor, "..."], dim_i: int) -> Float[Tensor, "..."]:
+    r"""
+    apply the softmax operation on a tensor.
+    Args:
+        x (Tensor): input tensor
+        dim_i (int): the dimension to apply softmax on
+    """
+    m = x.max(dim=dim_i, keepdim=True)
+    x = x - m.values
+    x = x.exp()
+    L = x.sum(dim = dim_i, keepdim=True)
+    return x / L
+
+def scaled_dot_product_attention(
+        Q: Float[Tensor, "batch_size ... seq_len d_k"],
+        K: Float[Tensor, "batch_size ... k_len d_k"],
+        V: Float[Tensor, "batch_size ... k_len d_v"],
+        mask: Bool[Tensor, "... seq_len k_len"] | None = None
+) -> Float[Tensor, "batch_size ... seq_len d_v"]:
+    r"""
+    attention
+    """
+    QK = einsum(Q, K, "... seq_len d_k, ... k_len d_k -> ... seq_len k_len") / math.sqrt(Q.shape[-1])
+
+    if mask is not None:
+        QK = QK.masked_fill(~mask, float("-inf"))
+
+    softmaxed = softmax(QK, -1)
+
+    return einsum(softmaxed, V, "... seq_len k_len, ... k_len d_v -> ... seq_len d_v") # (k_len = seq_len)  但是直接写会出现歧义
+
+class CausalMultiHeadSelfAttention(torch.nn.Module):
+    # q_proj_weight: Float[Tensor, "(num_heads d_k) d_model"]
+    # k_proj_weight: Float[Tensor, "(num_heads d_k) d_model"]
+    # v_proj_weight: Float[Tensor, "(num_heads d_v) d_model"]
+    # o_proj_weight: Float[Tensor, "d_model (num_heads d_v)"]
+    q_proj: Linear
+    k_proj: Linear
+    v_proj: Linear
+    o_proj: Linear
+    def __init__(self, d_model: int, num_heads: int, 
+                 rope: Bool = False,
+                 theta: float | None = None, 
+                 max_seq_len: int | None = None, 
+                ):
+        super().__init__()
+        self.q_proj = Linear(d_model, d_model)
+        self.k_proj = Linear(d_model, d_model)
+        self.v_proj = Linear(d_model, d_model)
+        self.o_proj = Linear(d_model, d_model)
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.rope = rope
+        if rope:
+            self.rpe = RotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len)
+            
+
+    def forward(self, x: Float[Tensor, "... sequence_length d_model"], token_positions: Int[Tensor, "... sequence_length"] | None = None) -> Float[Tensor, "... sequence_length d_model"]:
+        seq_len = x.shape[-2]
+        Q = einx.dot(
+            "(num_heads d_k) d_model, ... sequence_length d_model -> ... num_heads sequence_length d_k", 
+            self.q_proj.weight,
+            x,
+            num_heads = self.num_heads 
+        )
+        K = einx.dot(
+            "(num_heads d_k) d_model, ... sequence_length d_model -> ... num_heads sequence_length d_k", 
+            self.k_proj.weight,
+            x,
+            num_heads = self.num_heads
+        )
+        V = einx.dot(
+            "(num_heads d_v) d_model, ... sequence_length d_model -> ... num_heads sequence_length d_v",
+            self.v_proj.weight,
+            x,
+            num_heads = self.num_heads
+        )
+
+        if self.rope:
+            assert(token_positions is not None)
+            Q = self.rpe(Q, token_positions)
+            K = self.rpe(K, token_positions)
+        
+        
+        mask = ~torch.full((seq_len, seq_len), True, dtype=torch.bool).triu(1)
+
+        mha = scaled_dot_product_attention(Q, K, V, mask)
+
+        O = einx.dot(
+            "d_model (num_heads d_v), ... num_heads sequence_length d_v -> ... sequence_length d_model",
+            self.o_proj.weight,
+            mha,
+            num_heads = self.num_heads
+        )
+
+        return O
+
+class TransformerBlock(torch.nn.Module):
+    attn: CausalMultiHeadSelfAttention
+    ln1: RMSNorm
+    ffn: SwiGLU
+    ln2: RMSNorm
+    def __init__(self, d_model: int, num_heads: int, d_ff: int, max_seq_len: int, theta: float):
+        r"""
+        Construct A TransformerBlock, initializing Modules
+        Args:
+            d_model (int): Dimensionality of the Transformer block inputs.
+            num_heads (int): Number of heads to use in multi-head self-attention.
+            d_ff (int): Dimensionality of the position-wise feed-forward inner layer.
+            max_seq_len (int): Maximum sequence length to pre-cache if your implementation does that.
+            theta (float): RoPE parameter.
+        """
+        super().__init__()
+        self.attn = CausalMultiHeadSelfAttention(d_model, num_heads, rope=True, theta=theta, max_seq_len=max_seq_len)
+        self.ln1 = RMSNorm(d_model)
+        self.ln2 = RMSNorm(d_model)
+        self.ffn = SwiGLU(d_model, d_ff)
+    
+    def forward(self, x: Float[Tensor, "batch sequence_length d_model"]):
+        pass
