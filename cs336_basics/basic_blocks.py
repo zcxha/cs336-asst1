@@ -31,7 +31,7 @@ class Linear(torch.nn.Module):
         return einsum(self.weight, x, "d_out d_in, ... d_in -> ... d_out")
 
 class Embedding(torch.nn.Module):
-    weights: Float[torch.Tensor, "vocab_size d_model"]
+    weight: Float[torch.Tensor, "vocab_size d_model"]
     def __init__(self, num_embeddings: int, embedding_dim: int, device: torch.device | None = None, dtype: torch.dtype | None = None):
         r"""
         Construct an embedding module. This function should accept the following parameters:
@@ -42,11 +42,11 @@ class Embedding(torch.nn.Module):
             dtype: torch.dtype | None = None Data type of the parameters
         """
         super().__init__()
-        self.weights = torch.nn.Parameter(torch.empty(num_embeddings, embedding_dim))
-        torch.nn.init.trunc_normal_(self.weights,mean=0, std=1, a = -3, b = 3)
+        self.weight = torch.nn.Parameter(torch.empty(num_embeddings, embedding_dim))
+        torch.nn.init.trunc_normal_(self.weight,mean=0, std=1, a = -3, b = 3)
     
     def forward(self, token_ids: Float[torch.Tensor, "..."]) -> Float[torch.Tensor, "... d_model"]:
         r"""
         Lookup the embedding vectors for the given token IDs.
         """
-        return self.weights[token_ids]
+        return self.weight[token_ids]

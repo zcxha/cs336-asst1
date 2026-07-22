@@ -56,7 +56,7 @@ def run_embedding(
 
     E = basic_blocks.Embedding(vocab_size, d_model)
     with torch.no_grad():
-        E.weights.copy_(weights)
+        E.weight.copy_(weights)
     return E(token_ids)
 
 
@@ -380,7 +380,10 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    lm = prenorm_transformer_block.TransformerLM(vocab_size, context_length, num_layers, d_model, num_heads, d_ff, rope_theta)
+    lm.load_state_dict(weights)
+
+    return lm(in_indices)
 
 
 def run_rmsnorm(

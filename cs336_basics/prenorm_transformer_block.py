@@ -4,7 +4,7 @@ import einx
 from jaxtyping import Float, Int, Bool
 from torch import Tensor
 from einops import einsum
-from cs336_basics.basic_blocks import Linear
+from cs336_basics.basic_blocks import Linear, Embedding
 class RMSNorm(torch.nn.Module):
     weight: Float[torch.Tensor, "d_model"]
 
@@ -226,10 +226,31 @@ class TransformerLM(torch.nn.Module):
             vocab_size(int): The size of the vocabulary, necessary for determining the dimensionality of the token embedding matrix.
             context_length(int): The maximum context length, necessary for determining the dimensionality of the RoPE sin and cos buffer.
             num_layers(int): The number of Transformer blocks to use.
+            d_model (int): Dimensionality of the Transformer block inputs.
+            num_heads (int): Number of heads to use in multi-head self-attention.
+            d_ff (int): Dimensionality of the position-wise feed-forward inner layer.
+            theta (float): RoPE parameter.
     """
-    def __init__(self, vocab_size: int, context_length: int, num_layers: int):
-        
+    token_embeddings: Embedding
+    layers: torch.nn.ModuleList
+    ln_final: RMSNorm
+    lm_head: Linear
+    def __init__(self, vocab_size: int, context_length: int, num_layers: int, d_model: int, num_heads: int, d_ff: int, theta: float):
         super().__init__()
+        self.token_embeddings = Embedding(vocab_size, d_model)
+        self.layers = torch.nn.ModuleList(
+            [TransformerBlock(d_model, num_heads, d_ff, context_length, theta) for _ in range(num_layers)]
+        )
+        self.ln_final = RMSNorm(d_model)
+        self.lm_head = Linear(d_model, vocab_size)
     
-    def forward():
-        pass
+    def forward(self, x: Int[Tensor, "batch_size sequence_length"]) -> Float[Tensor, "batch_size sequence_length vocab_size"]:
+        hidden: Float[Tensor, "batch_size sequence_length d_model"] = self.token_embeddings(x)
+
+        for layer in self.layers:
+            hidden = layer(hidden)
+        
+        hidden: Float[Tensor, "batch_size sequence_length d_model"] = self.ln_final(hidden)
+        logits = self.lm_head(hidden)
+
+        return logits
