@@ -1,12 +1,11 @@
-batch_size = 1
+batch_size = 1024
 vocab_size = 50257
-context_length = 16384
+context_length = 1024
 sequence_length = context_length
 num_layers = 48
 d_model = 1600
 num_heads = 25
 d_ff = 4288
-
 
 # accounting flops
 
@@ -44,3 +43,5 @@ Transformer: {transformer_blocks_prop * 100}%
     - SwiGLU: {swig_prop * 100}%
 LMHead: {lm_head_prop * 100}%
 """)
+
+print(f"total {total / DIVIDER} GFLOPs {total / DIVIDER / 1000} TFLOPs")

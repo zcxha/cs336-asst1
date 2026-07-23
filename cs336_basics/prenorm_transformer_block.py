@@ -5,6 +5,7 @@ from jaxtyping import Float, Int, Bool
 from torch import Tensor
 from einops import einsum
 from cs336_basics.basic_blocks import Linear, Embedding
+from cs336_basics.nn_utils import softmax
 class RMSNorm(torch.nn.Module):
     weight: Float[torch.Tensor, "d_model"]
 
@@ -89,19 +90,6 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         interleave_xy = torch.stack([rot_x, rot_y], dim=-1)
         result = interleave_xy.flatten(-2)
         return result
-
-def softmax(x: Float[Tensor, "..."], dim_i: int) -> Float[Tensor, "..."]:
-    r"""
-    apply the softmax operation on a tensor.
-    Args:
-        x (Tensor): input tensor
-        dim_i (int): the dimension to apply softmax on
-    """
-    m = x.max(dim=dim_i, keepdim=True)
-    x = x - m.values
-    x = x.exp()
-    L = x.sum(dim = dim_i, keepdim=True)
-    return x / L
 
 def scaled_dot_product_attention(
         Q: Float[Tensor, "batch_size ... seq_len d_k"],
