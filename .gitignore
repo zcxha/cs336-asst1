@@ -163,4 +163,5 @@ cython_debug/
 *.zip
 
 # data
-data/
+data/*
+!data/.gitkeep

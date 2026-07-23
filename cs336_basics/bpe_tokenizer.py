@@ -139,6 +139,6 @@ class Tokenizer:
         Decode a sequence of token IDs into text.
         """
         res = bytes()
-        for id in ids:
-            res += self.vocab[id]
+        for i in ids:
+            res += self.vocab[i]
         return res.decode('utf-8', errors="replace")
