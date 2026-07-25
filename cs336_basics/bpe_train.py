@@ -170,6 +170,8 @@ def do_merge(tokens: list[Token], pair: tuple[bytes, bytes], pair_locations: dic
         # and update variation to counts
         for k, v in counts_changes.items():
             counts[k] += v
+            if counts[k] <= 0:
+                del counts[k]
             if v > 0:
                 pair_locations[k].add(idx)
 

@@ -14,7 +14,7 @@ class Linear(torch.nn.Module):
             dtype: torch.dtype | None = None Data type of the parameters
         """
         super().__init__()
-        self.weight = torch.nn.Parameter(torch.empty(out_features, in_features))
+        self.weight = torch.nn.Parameter(torch.empty(out_features, in_features, device=device, dtype=dtype))
         std = math.sqrt(2 / (in_features + out_features))
         torch.nn.init.trunc_normal_(self.weight, std=std, a = -3 * std, b = 3 * std)
     
@@ -42,7 +42,7 @@ class Embedding(torch.nn.Module):
             dtype: torch.dtype | None = None Data type of the parameters
         """
         super().__init__()
-        self.weight = torch.nn.Parameter(torch.empty(num_embeddings, embedding_dim))
+        self.weight = torch.nn.Parameter(torch.empty(num_embeddings, embedding_dim, device=device, dtype=dtype))
         torch.nn.init.trunc_normal_(self.weight,mean=0, std=1, a = -3, b = 3)
     
     def forward(self, token_ids: Float[torch.Tensor, "..."]) -> Float[torch.Tensor, "... d_model"]:

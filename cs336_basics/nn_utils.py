@@ -36,10 +36,10 @@ class AdamW(torch.optim.Optimizer):
         alpha: learning rate
 
     """
-    def __init__(self, params, lr, weight_decay,  betas: tuple, eps):
+    def __init__(self, params, lr, weight_decay,  betas: tuple, eps, device: torch.device = torch.device("cuda")):
         if lr < 0:
             raise ValueError(f"Invalid learning rate: {lr}")
-        defaults = {"alpha": lr, "beta1": betas[0], "beta2": betas[1], "epsilon": eps, "lamda": weight_decay}
+        defaults = {"alpha": lr, "beta1": betas[0], "beta2": betas[1], "epsilon": eps, "lamda": weight_decay, "device": device}
         super().__init__(params, defaults)
 
     def step(self, closure: Optional[Callable] = None):
@@ -50,15 +50,15 @@ class AdamW(torch.optim.Optimizer):
             beta2 = group["beta2"]
             epsilon = group["epsilon"]
             lamda = group["lamda"]
-
+            device = group["device"]
             for p in group["params"]:
                 if p.grad is None:
                     continue
 
                 state = self.state[p]
                 t = state.get("t", 1)
-                m = state.get("m", torch.zeros_like(p.data))
-                v = state.get("v", torch.zeros_like(p.data))
+                m = state.get("m", torch.zeros_like(p.data, device=device))
+                v = state.get("v", torch.zeros_like(p.data, device=device))
                 grad = p.grad.data
                 alpha_t = alpha * (math.sqrt(1 - beta2 ** t) / (1 - beta1 ** t))
                 p.data -= alpha * lamda * p.data

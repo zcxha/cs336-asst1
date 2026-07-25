@@ -1,12 +1,12 @@
-batch_size = 1024
-vocab_size = 50257
+batch_size = 8
+vocab_size = 10000
 context_length = 1024
 sequence_length = context_length
-num_layers = 48
-d_model = 1600
-num_heads = 25
-d_ff = 4288
-step = 400 * 1000
+num_layers = 12
+d_model = 768
+num_heads = 12
+d_ff = 2048
+step = 100
 
 parameters = d_model * (vocab_size + num_layers * (2 + 3 * d_ff + 4 * d_model) + 1)
 activate_transformer_rms2 = activate_transformer_rms1 = batch_size * sequence_length * d_model * 2
