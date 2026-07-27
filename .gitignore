@@ -165,3 +165,7 @@ cython_debug/
 # data
 data/*
 !data/.gitkeep
+
+*.ckpt
+*.pth
+wandb/

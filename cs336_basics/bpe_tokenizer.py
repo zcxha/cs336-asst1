@@ -4,6 +4,7 @@ from typing import Iterable, Iterator
 from collections import defaultdict
 import pickle
 import regex as re
+from tqdm import tqdm
 
 class Tokenizer:
     vocab = defaultdict(bytes)
@@ -68,7 +69,7 @@ class Tokenizer:
         PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
         # part-by-part merge and insert special tokens.
-        for part in splited_parts:
+        for part in tqdm(splited_parts, desc="[Tokenizer] encoding part"):
             if part in self.special_tokens:
                 res.append(self.vocab_rev[part.encode('utf-8')])
             else:
@@ -101,7 +102,7 @@ class Tokenizer:
         Given an iterable of strings (e.g., a Python file handle), return a generator that lazily yields token IDs.
         This is required for memory-efficient tokenization of large files that we cannot directly load into memory.
         """
-        for line in iterable:
+        for line in tqdm(iterable, desc="[Tokenizer] encoding iter"):
             splited_parts = Tokenizer._split(line, self.special_tokens)
             PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
             
