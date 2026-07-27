@@ -13,8 +13,7 @@ def get_batch(
         ) -> tuple[torch.Tensor, torch.Tensor]:
     indices = np.random.choice(
         a=len(dataset) - context_length,
-        size=batch_size,
-        replace=False
+        size=batch_size
     )
     offsets = np.arange(context_length)
     index = indices[:, None] + offsets[None, :]

@@ -169,3 +169,5 @@ data/*
 *.ckpt
 *.pth
 wandb/
+
+best_loss.txt

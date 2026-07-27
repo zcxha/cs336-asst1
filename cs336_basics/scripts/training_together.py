@@ -10,6 +10,7 @@ from cs336_basics.prenorm_transformer_block import TransformerLM
 from cs336_basics.nn_utils import AdamW, cross_entropy, get_lr_cosine_schedule, gradient_clipping
 from pathlib import Path
 from tqdm import tqdm
+from datetime import datetime
 
 def save_model(model: torch.nn.Module, out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes]):
     obj = {"model": model.state_dict()}
@@ -55,7 +56,7 @@ if __name__ == '__main__':
     # 初始化 wandb
     wandb.init(
     project="cs336-asst1",
-    name=f"training_lr{args.max_lr}_bs{args.batch_size}", # 动态生成 run 名称
+    name=f"training_lr{args.max_lr}_bs{args.batch_size}_{datetime.now()}", # 动态生成 run 名称
     config=config_dict
     )
     
@@ -73,6 +74,8 @@ if __name__ == '__main__':
         with open(args.best_loss_savepath, "r") as f:
             best_loss = float(f.read())
     for it in tqdm(range(last_iter + 1, args.steps + 1), desc="training epochs"):
+        # -1 clean grad
+        adamw.zero_grad()
         # 0 sample inputs & targets
         sample = data_utils.get_batch(dataset, args.batch_size, args.context_length, device=args.device)
         # 1 model forward
@@ -89,8 +92,6 @@ if __name__ == '__main__':
             group["alpha"] = lr
         # 6 optimizer update
         adamw.step()
-        # 7 clean grad
-        adamw.zero_grad()
         # 8 logging
         wandb.log({"train_loss": loss.item()})
         # 9 checkpointing
