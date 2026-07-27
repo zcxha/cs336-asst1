@@ -10,4 +10,5 @@ d_ff = 2048 # d_ff = d_model * 8 / 3 , and multiple of 64
 theta = 10000
 
 # tokenizer
+special_tokens = ["<|endoftext|>"]
 eos_token = "<|endoftext|>"
