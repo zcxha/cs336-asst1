@@ -1,11 +1,4 @@
-batch_size = 1024
-vocab_size = 50257
-context_length = 1024
-sequence_length = context_length
-num_layers = 48
-d_model = 1600
-num_heads = 25
-d_ff = 4288
+from cs336_basics.scripts.training_config import *
 
 # accounting flops
 
@@ -45,3 +38,5 @@ LMHead: {lm_head_prop * 100}%
 """)
 
 print(f"total {total / DIVIDER} GFLOPs {total / DIVIDER / 1000} TFLOPs")
+
+forward_tflops = total / DIVIDER / 1000

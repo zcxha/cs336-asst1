@@ -1,14 +1,6 @@
-batch_size = 8
-vocab_size = 10000
-context_length = 1024
-sequence_length = context_length
-num_layers = 12
-d_model = 768
-num_heads = 12
-d_ff = 2048
-step = 100
+from cs336_basics.scripts.training_config import *
 
-parameters = d_model * (vocab_size + num_layers * (2 + 3 * d_ff + 4 * d_model) + 1)
+parameters = d_model * (2 * vocab_size + num_layers * (2 + 3 * d_ff + 4 * d_model) + 1)
 activate_transformer_rms2 = activate_transformer_rms1 = batch_size * sequence_length * d_model * 2
 activate_transformer_mha = batch_size * sequence_length * (d_model * 5 + sequence_length)
 activate_ffn = batch_size * sequence_length * d_model + batch_size * sequence_length * d_ff + batch_size * sequence_length * d_ff
@@ -20,13 +12,19 @@ DIVIDER = 1024 * 1024 * 1024
 # fp32 to store
 total_memory = 4  * (parameters + gradients + optimizer_state + (activate_ffn + activate_transformer_mha + activate_transformer_rms1 + activate_transformer_rms2) * num_layers + norm_linear + cross_entropy)
 
+from cs336_basics.scripts.transformer_accounting import forward_tflops
+
 # calculate total FLOPS (forward + backward + optimizer)
 DIVIDER_TFLOP = 1000 * 1000 * 1000 * 1000
-forward_flops = 3601 # TFLOPs
+forward_flops = forward_tflops # TFLOPs
 backward_flops = 2 * forward_flops
 optimizer_one_step_flops = d_model * (vocab_size + num_layers * (2 + 3 * d_ff + 4 * d_model) + 1) * 13 / DIVIDER_TFLOP
 
 total_flops = (forward_flops + backward_flops + optimizer_one_step_flops) * step
+
+gpu_speed = MFU * compute_capability
+
+time_to_train = total_flops / gpu_speed / 60 / 60 # hour
 
 print(f"""batch_size {batch_size} step {step}
 Memory:
@@ -39,8 +37,11 @@ optimizer_state: {4*optimizer_state / DIVIDER} GB
 the memory of activations+parameters+gradients+optimizer state {total_memory / DIVIDER}GB
 
 FLOPs:
+--- one step ---
 forward: {forward_flops} TFLOPs
 backward: {backward_flops} TFLOPs
-optimizer_one_step: {optimizer_one_step_flops} TFLOPs
+optimizer: {optimizer_one_step_flops} TFLOPs
+--- total ---
 total_flops of training with step {step} : {total_flops} TFLOPs
+total time of training with compute {compute_capability} and MFU {MFU} is : {time_to_train} hours
       """)
