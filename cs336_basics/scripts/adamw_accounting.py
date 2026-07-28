@@ -24,6 +24,7 @@ total_flops = (forward_flops + backward_flops + optimizer_one_step_flops) * step
 
 gpu_speed = MFU * compute_capability
 
+time_to_train_min = total_flops / gpu_speed / 60 # min
 time_to_train = total_flops / gpu_speed / 60 / 60 # hour
 
 print(f"""batch_size {batch_size} step {step}
@@ -43,5 +44,5 @@ backward: {backward_flops} TFLOPs
 optimizer: {optimizer_one_step_flops} TFLOPs
 --- total ---
 total_flops of training with step {step} : {total_flops} TFLOPs
-total time of training with compute {compute_capability} and MFU {MFU} is : {time_to_train} hours
+total time of training with compute {compute_capability} and MFU {MFU} is : {time_to_train_min}min or {time_to_train} hours
       """)

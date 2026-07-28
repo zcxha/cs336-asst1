@@ -106,7 +106,7 @@ if __name__ == '__main__':
     # tiny_stories_cr = get_tinystories_compression_ratio()
     # hybrid_cr = get_owt_by_tinystories_tokenizer_compression_ratio()
 
-    encode_file(DATADIR / "vocab_tinystories.pkl", DATADIR / "merge_tinystories.pkl", DATADIR / "TinyStoriesV2-GPT4-train.txt", DATADIR / "TinyStoriesV2-GPT4-train.map", 4)
+    encode_file(DATADIR / "vocab_tinystories.pkl", DATADIR / "merge_tinystories.pkl", DATADIR / "TinyStoriesV2-GPT4-valid.txt", DATADIR / "TinyStoriesV2-GPT4-valid.map", 4)
 
     # encode_file(DATADIR / "vocab_owt.pkl", DATADIR / "merge_owt.pkl", DATADIR / "owt_train.txt", DATADIR / "owt_train.map", owt_cr)
     # encode_file(DATADIR / "vocab_owt.pkl", DATADIR / "merge_owt.pkl", DATADIR / "owt_valid.txt", DATADIR / "owt_valid.map", owt_cr)

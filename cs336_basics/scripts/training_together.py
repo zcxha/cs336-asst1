@@ -21,13 +21,14 @@ if __name__ == '__main__':
 
     parser.add_argument("dataset", help="tokenized dataset which contains token ids. It's numpy uint16")
     parser.add_argument("dataset_val", help="validation dataset")
+    parser.add_argument("--need_save", type=int, default=1)
     parser.add_argument("--load_checkpoint", type=Path, default="modelbackup.ckpt")
     parser.add_argument("--save_checkpoint", type=Path, default="modelbackup.ckpt")
     parser.add_argument("--best_model_savepath", type=Path, default="best_model.pth")
     parser.add_argument("--best_loss_savepath", type=Path, default="best_loss.txt")
-    parser.add_argument("--save_interval", type=int, default=100, help="every [save_interval] steps of training, save model")
-    parser.add_argument("--val_interval", type=int, default=100, help="every [val_interval] steps of training, run a validation")
-    parser.add_argument("--val_batchnum", type=int, default=50, help="when validation, what number of batches needed to be validated")
+    parser.add_argument("--save_interval", type=int, default=config.save_interval, help="every [save_interval] steps of training, save model")
+    parser.add_argument("--val_interval", type=int, default=config.val_interval, help="every [val_interval] steps of training, run a validation")
+    parser.add_argument("--val_batchnum", type=int, default=config.val_batchnum, help="when validation, what number of batches needed to be validated")
     parser.add_argument("--vocab_size", type=int, default=config.vocab_size)
     parser.add_argument("--context_length", type=int, default=config.context_length)
     parser.add_argument("--num_layers", type=int, default=config.num_layers)
@@ -37,17 +38,17 @@ if __name__ == '__main__':
     parser.add_argument("--theta", type=float, default=config.theta)
 
     parser.add_argument("--batch_size", type=int, default=config.batch_size)
-    parser.add_argument("--weight_decay", type=float, default=0.1)
-    parser.add_argument("--betas", nargs=2, type=float, default=(0.9, 0.95))
-    parser.add_argument("--eps", type=float, default=1e-8)
+    parser.add_argument("--weight_decay", type=float, default=config.weight_decay)
+    parser.add_argument("--betas", nargs=2, type=float, default=config.betas)
+    parser.add_argument("--eps", type=float, default=config.eps)
     parser.add_argument("--steps", type=int, default=config.step, help="max training iterations")
     parser.add_argument("--device", type=str, default="cuda")
 
         
-    parser.add_argument("--max_lr", type=float, default=3e-4)
-    parser.add_argument("--min_lr", type=float, default=3e-5)
-    parser.add_argument("--warmup_iters", type=int, default=10)
-    parser.add_argument("--max_l2norm", type=float, default=1000)
+    parser.add_argument("--max_lr", type=float, default=config.max_lr)
+    parser.add_argument("--min_lr", type=float, default=config.min_lr)
+    parser.add_argument("--warmup_iters", type=int, default=config.warmup_iters)
+    parser.add_argument("--max_l2norm", type=float, default=config.max_l2norm)
 
     args = parser.parse_args()
 
@@ -67,10 +68,10 @@ if __name__ == '__main__':
     dataset_val = np.memmap(args.dataset_val, dtype=np.uint16, mode="r")
 
     last_iter = 0
-    if args.load_checkpoint.is_file():
+    if args.load_checkpoint.is_file() and args.need_save:
         last_iter = data_utils.load_checkpoint(args.load_checkpoint, model, adamw)
     best_loss = float("inf")
-    if args.best_loss_savepath.is_file():
+    if args.best_loss_savepath.is_file() and args.need_save:
         with open(args.best_loss_savepath, "r") as f:
             best_loss = float(f.read())
     for it in tqdm(range(last_iter + 1, args.steps + 1), desc="training epochs"):
@@ -85,7 +86,7 @@ if __name__ == '__main__':
         # 3 backward
         loss.backward()
         # 4 gradient clipping
-        gradient_clipping(model.parameters(), args.max_l2norm)
+        global_gradient_norm = gradient_clipping(model.parameters(), args.max_l2norm)
         # 5 lr_schedule
         lr = get_lr_cosine_schedule(it, args.max_lr, args.min_lr, args.warmup_iters, args.steps)
         for group in adamw.param_groups:
@@ -93,9 +94,9 @@ if __name__ == '__main__':
         # 6 optimizer update
         adamw.step()
         # 8 logging
-        wandb.log({"train_loss": loss.item()})
+        wandb.log({"train_loss": loss.item(), "global_gradient_norm": global_gradient_norm}, step=it)
         # 9 checkpointing
-        if it % args.save_interval == 0:
+        if it % args.save_interval == 0 and args.need_save:
             data_utils.save_checkpoint(model, adamw, it, args.save_checkpoint)
         # 10 validate loss
         if it % args.val_interval == 0:
@@ -107,8 +108,8 @@ if __name__ == '__main__':
                     logits = model(sample[0])
                     val_loss += cross_entropy(logits, sample[1]).item()
                 val_loss /= args.val_batchnum
-                wandb.log({"val_loss": val_loss})
-                if val_loss < best_loss:
+                wandb.log({"val_loss": val_loss}, step=it)
+                if args.need_save and val_loss < best_loss:
                     best_loss = val_loss
                     save_model(model, args.best_model_savepath)
                     with open(args.best_loss_savepath, "w") as f:

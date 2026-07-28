@@ -201,7 +201,7 @@ class TransformerBlock(torch.nn.Module):
     def forward(self, x: Float[Tensor, "batch sequence_length d_model"]):
         seq_len = x.shape[1]
         batch_size = x.shape[0]
-        token_positions = torch.arange(0, seq_len).unsqueeze(0).unsqueeze(0).expand([batch_size, 1, seq_len])
+        token_positions = torch.arange(0, seq_len, device=x.device).unsqueeze(0).unsqueeze(0).expand([batch_size, 1, seq_len])
         
         attention_with_rope = self.attn(self.ln1(x), token_positions) + x
 
