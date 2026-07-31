@@ -193,7 +193,7 @@ class TransformerBlock(torch.nn.Module):
             theta (float): RoPE parameter.
         """
         super().__init__()
-        self.attn = CausalMultiHeadSelfAttention(d_model, num_heads, rope=True, theta=theta, max_seq_len=max_seq_len, device=device)
+        self.attn = CausalMultiHeadSelfAttention(d_model, num_heads, rope=False, theta=theta, max_seq_len=max_seq_len, device=device)
         self.ln1 = RMSNorm(d_model, device=device)
         self.ln2 = RMSNorm(d_model, device=device)
         self.ffn = SwiGLU(d_model, d_ff, device=device)
