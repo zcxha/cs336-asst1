@@ -5,7 +5,7 @@ sequence_length = context_length
 num_layers = 4
 d_model = 512
 num_heads = 16
-d_ff = 1344 # d_ff = d_model * 8 / 3 , and multiple of 64
+d_ff = 2048 # d_ff = d_model * 8 / 3 , and multiple of 64
 
 theta = 10000
 

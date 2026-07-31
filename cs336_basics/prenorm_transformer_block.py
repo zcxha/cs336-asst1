@@ -58,6 +58,19 @@ class SwiGLU(torch.nn.Module):
         dot_prod = silu_part * W3_x
         result = self.w2(dot_prod)
         return result
+
+class SiLU(torch.nn.Module):
+    w1: Linear # Float[torch.Tensor, "d_ff d_model"]
+    w2: Linear # Float[torch.Tensor, "d_model d_ff"]
+    def __init__(self, d_model: int, d_ff: int, device: torch.device | None = None, dtype: torch.dtype | None = None):
+        super().__init__()
+        self.w1 = Linear(d_model, d_ff, device=device, dtype=dtype)
+        self.w2 = Linear(d_ff, d_model, device=device, dtype=dtype)
+
+    def forward(self, x: Float[torch.Tensor, "... d_model"]) -> Float[torch.Tensor, "... d_model"]:
+        W1_x = self.w1(x)
+        silu_part = W1_x * torch.sigmoid(W1_x)
+        return self.w2(silu_part)
         
 class RotaryPositionalEmbedding(torch.nn.Module):
     def __init__(self, theta: float, d_k: int, max_seq_len: int, device: torch.device | None = None):
@@ -180,7 +193,7 @@ class CausalMultiHeadSelfAttention(torch.nn.Module):
 class TransformerBlock(torch.nn.Module):
     attn: CausalMultiHeadSelfAttention
     ln1: RMSNorm
-    ffn: SwiGLU
+    ffn: SiLU
     ln2: RMSNorm
     def __init__(self, d_model: int, num_heads: int, d_ff: int, max_seq_len: int, theta: float, device: torch.device | None = None, dtype: torch.dtype | None = None):
         r"""
@@ -196,7 +209,7 @@ class TransformerBlock(torch.nn.Module):
         self.attn = CausalMultiHeadSelfAttention(d_model, num_heads, rope=True, theta=theta, max_seq_len=max_seq_len, device=device)
         self.ln1 = RMSNorm(d_model, device=device)
         self.ln2 = RMSNorm(d_model, device=device)
-        self.ffn = SwiGLU(d_model, d_ff, device=device)
+        self.ffn = SiLU(d_model, d_ff, device=device)
     
     def forward(self, x: Float[Tensor, "batch sequence_length d_model"]):
         seq_len = x.shape[1]
