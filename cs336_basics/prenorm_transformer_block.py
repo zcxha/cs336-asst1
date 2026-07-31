@@ -203,9 +203,9 @@ class TransformerBlock(torch.nn.Module):
         batch_size = x.shape[0]
         token_positions = torch.arange(0, seq_len, device=x.device).unsqueeze(0).unsqueeze(0).expand([batch_size, 1, seq_len])
         
-        attention_with_rope = self.attn(self.ln1(x), token_positions) + x
+        attention_with_rope = self.attn(x, token_positions) + x
 
-        ffn_result = self.ffn(self.ln2(attention_with_rope)) + attention_with_rope
+        ffn_result = self.ffn((attention_with_rope)) + attention_with_rope
 
         return ffn_result
 
@@ -240,7 +240,7 @@ class TransformerLM(torch.nn.Module):
         for layer in self.layers:
             hidden = layer(hidden)
         
-        hidden: Float[Tensor, "batch_size sequence_length d_model"] = self.ln_final(hidden)
+        # hidden: Float[Tensor, "batch_size sequence_length d_model"] = self.ln_final(hidden)
         logits = self.lm_head(hidden)
 
         return logits
