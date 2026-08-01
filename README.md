@@ -48,3 +48,5 @@ gunzip owt_valid.txt.gz
 cd ..
 ```
 
+部分报告见博客以及该仓库pdf
+https://zcxha.github.io/blog/post/cs336%20note%201%20-%20BPE%20merge%20%E7%9A%84%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E5%AE%9E%E8%B7%B5/
